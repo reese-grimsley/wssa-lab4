@@ -18,6 +18,8 @@
 // WHO_AM_I data value
 #define WHO_AM_I_VAL 0xC7
 
+#define DEBOUNCE_COUNT 25
+
 //------------------------------------------------------------------------------
 // Register Addresses
 //------------------------------------------------------------------------------
@@ -178,10 +180,24 @@ class FXOS8700CQ {
 				} SRAWDATA;
 
        typedef struct {
-            int16_t x=0;
-            int16_t y=0;
-            int16_t z=0;
+            int16_t avgX=0;
+            int16_t avgY=0;
+            int16_t avgZ=0;
+            int16_t stdX=0;
+            int16_t stdY=0;
+            int16_t stdZ=0;
        } CALDATA;
+
+       typedef_struct {
+            int8_t threshXLower=0;
+            int8_t threshXUpper=0;
+            int8_t threshYLower=0;
+            int8_t threshYUpper=0;
+            int8_t threshZLower=0;
+            int8_t threshZUpper=0;
+            int8_t threshMagnitudeLower=0;
+            int8_t threshMagnitudeUpper=0;
+       } TRESHOLDS
 
 				// Sensor data
 				SRAWDATA magData; 				// RAW magnometer sensor data
@@ -212,9 +228,12 @@ class FXOS8700CQ {
         // Interrupt Functions
         void enableMagInterrupt(void);
         void disableMagInterrupt(void);
+        void calculateISRThreshold(void);
 
         // Calibration Function
         void calibrateMag(void);
+
+        
 };
 
 #endif

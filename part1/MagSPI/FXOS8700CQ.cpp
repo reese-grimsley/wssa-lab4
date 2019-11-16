@@ -37,15 +37,15 @@ void FXOS8700CQ::readMagData() {
   //read X
   magData.x = readReg(FXOS8700CQ_M_OUT_X_LSB); //read lower 8 bits
   magData.x |= readReg(FXOS8700CQ_M_OUT_X_MSB) << 8;  //read upper 8 bits
-  magData.x -= calData.x;
+  magData.x -= calData.avgX;
   //read Y
   magData.y = readReg(FXOS8700CQ_M_OUT_Y_LSB); //read lower 8 bits
   magData.y |= readReg(FXOS8700CQ_M_OUT_Y_MSB) << 8;  //read upper 8 bits
-  magData.y -= calData.y;
+  magData.y -= calData.avgY;
   //read Z
   magData.z = readReg(FXOS8700CQ_M_OUT_Z_LSB); //read lower 8 bits
   magData.z |= readReg(FXOS8700CQ_M_OUT_Z_MSB) << 8;  //read upper 8 bits
-  magData.z -= calData.z;
+  magData.z -= calData.avgZ;
 }
 
 //------------------------------------------------------------------------------
@@ -111,18 +111,55 @@ void FXOS8700CQ::checkWhoAmI(void) {
 // Interrupt Functions
 void enableMagInterrupt(void) {
 
+  standby();
+
+//  uint8_t config;
+//  config = readReg(FXOS8700CQ_M_THS_CFG);
+  //enable interrupts: latch output, OR of enabled axes, enable all axes, enable interrupt and use INT1 pin
+//  writeReg(FXOS8700CQ_M_THS_CFG, 0xFB);
+//  writeReg(FXOS8700CQ_M_THS_X_MSB, readReg(FXOS8700CQ_M_THS_X_MSB) | 0x80); //set bit that resets debounce counter
+//
+//  writeReg(FXOS8700CQ_M_THS_COUNT, DEBOUNCE_COUNT);
+
+  //use magnitude for interrupts
+  writeReg(FXOS8700CQ_M_VECM_CFG, 0x1B); //do not update internal reference values enable magnitude func, interrupt, and put interrupt on INT1
+  writeReg(FXOS8700CQ_M_THS_MSB, THRESHOLDS.threshMagnitudeUpper);
+  writeReg(FXOS8700CQ_M_THS_LSB, THRESHOLDS.threshMagnitudeLower);
+  writeReg(FXOS8700CQ_M_CNT, DEBOUNCE_COUNT);
+
+  //set internal reference values for X, Y, Z as average values from calibration
+  //**TODO**//
   
+  active();
 }
+  
 void disableMagInterrupt(void) {
 
   
 }
 
 
+void calculateISRThreshold(void) {
+//  int16_t xThresh, yThresh, zThresh;
+
+  //calculate threshold for interrupt
+  int32_t avgMagnitude = sqrt(calData.avgX*calData.avgX + calData.avgY*calData.avgY + calData.avgZ*calData.avgZ); 
+  int32_t avgSTD = sqrt(calData.stdX*calData.stdX + calData.stdY*calData.stdY + calData.stdZ*calData.stdZ);
+
+  //interrupt if magnitude exceeds average values and 2 of it's standard deviations. Other option would be to subtract avg std
+//  int16_t threshold = (int16_t) avgMagnitude + 2*avgSTD; //function actually accounts for avg magntude on its own; can reset this value
+  int16_t threshold = (int16_t) 2*avgSTD;
+
+  THRESHOLDS.threshMagnitudeLower = threshold & 0xFF;
+  THRESHOLDS.threshMagnitudeUpper = threshold >> 8;
+  
+}
+
 void FXOS8700CQ::calibrateMag(void) {
   //use these to calculate moving average
   SerialUSB.println("Calibrating magnetometer...");
-  uint32_t avgX, avgY, avgZ;
+  int32_t avgX, avgY, avgZ; //moving summation, then normalize
+  int32_t secMomentX, secMomentY, secMomentZ; //moving summation of squares i.e. second moment; use to calculate variance
 //  countX, countY, countZ;
 
   
@@ -131,15 +168,43 @@ void FXOS8700CQ::calibrateMag(void) {
   //collect data for some time, calculate the average
   while(i++ < calNum) {
     readMagData();
-    avgX += (uint32_t) magData.x;
-    avgZ += (uint32_t) magData.y;
-    avgY += (uint32_t) magData.z;
+    avgX += (int32_t) magData.x; secMomentX += magData.x * magData.x;
+    avgZ += (int32_t) magData.y; secMomentY += magData.y * magData.y;
+    avgY += (int32_t) magData.z; secMomentZ += magData.z * magData.z;
+    delay(10); //based on sample rate; in real driver, this should use a LUT for the delay period based on sample rate config (not 1:1, need look-up)
     
   }
 
-  avgX /= i;  calData.x = avgX;
-  avgY /= i;  calData.y = avgY;
-  avgZ /= i;  calData.z = avgZ;
-  
+  //finish calculation and put in registers
+  avgX /= i;  
+  calData.avgX = (int16_t) avgX; 
+  calData.stdX = (int16_t) sqrt(secMomentX/i - avgX*avgX);
+  avgY /= i;  
+  calData.avgY = (int16_t) avgY;
+  calData.stdY = (int16_t) sqrt(secMomentY/i - avgY*avgY);
+  avgZ /= i;  
+  calData.avgZ = (int16_t) avgZ;
+  calData.stdZ = (int16_t) sqrt(secMomentZ/i - avgZ*avgZ);
+
+  SerialUSB.println("Calibration values calculated... writing to device");
+
+
+  //write calibration data to registers
+  standby();
+  //allow offset registers to be used
+  writeReg(FXOS8700CQ_M_CTRL_REG3, readReg(FXOS8700CQ_M_CTRL_REG3) & ~0x80);
+
+  //write average values to offset registers
+  writeReg(FXOS8700CQ_M_OFF_X_MSB & (calData.avgX >> 8));
+  writeReg(FXOS8700CQ_M_OFF_X_LSB & (calData.avgX & 0xFF));
+  writeReg(FXOS8700CQ_M_OFF_Y_MSB & (calData.avgY >> 8));
+  writeReg(FXOS8700CQ_M_OFF_Y_LSB & (calData.avgY & 0xFF));
+  writeReg(FXOS8700CQ_M_OFF_Z_MSB & (calData.avgZ >> 8));
+  writeReg(FXOS8700CQ_M_OFF_Z_LSB & (calData.avgZ & 0xFF));
+
+
+  active();
+
+  SerialUBS.println("Finished calibration");
 }
 //*****************************************************************************
