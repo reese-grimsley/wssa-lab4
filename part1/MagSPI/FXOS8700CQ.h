@@ -177,6 +177,7 @@ class FXOS8700CQ {
 	    			int16_t	x;
 	    			int16_t	y;
 	    			int16_t	z;
+            int16_t magnitude;
 				} SRAWDATA;
 
        typedef struct {
@@ -188,20 +189,21 @@ class FXOS8700CQ {
             int16_t stdZ=0;
        } CALDATA;
 
-       typedef_struct {
-            int8_t threshXLower=0;
-            int8_t threshXUpper=0;
-            int8_t threshYLower=0;
-            int8_t threshYUpper=0;
-            int8_t threshZLower=0;
-            int8_t threshZUpper=0;
+       typedef struct {
+//            int8_t threshXLower=0;
+//            int8_t threshXUpper=0;
+//            int8_t threshYLower=0;
+//            int8_t threshYUpper=0;
+//            int8_t threshZLower=0;
+//            int8_t threshZUpper=0;
             int8_t threshMagnitudeLower=0;
             int8_t threshMagnitudeUpper=0;
-       } TRESHOLDS
+       } THRESHOLDS;
 
 				// Sensor data
 				SRAWDATA magData; 				// RAW magnometer sensor data
         CALDATA calData;           // calibration data
+        THRESHOLDS thresholds;
 				uint8_t whoAmIData; 			// Who Am I data
 
 				// Sensor configuration

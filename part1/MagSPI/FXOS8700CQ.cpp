@@ -90,8 +90,6 @@ void FXOS8700CQ::init() {
   writeReg(FXOS8700CQ_M_CTRL_REG1, current_config);
 
   active();
-
-  calibrateMag();
   
 }
 
@@ -109,7 +107,7 @@ void FXOS8700CQ::checkWhoAmI(void) {
 }
 
 // Interrupt Functions
-void enableMagInterrupt(void) {
+void FXOS8700CQ::enableMagInterrupt(void) {
 
   standby();
 
@@ -120,26 +118,66 @@ void enableMagInterrupt(void) {
 //  writeReg(FXOS8700CQ_M_THS_X_MSB, readReg(FXOS8700CQ_M_THS_X_MSB) | 0x80); //set bit that resets debounce counter
 //
 //  writeReg(FXOS8700CQ_M_THS_COUNT, DEBOUNCE_COUNT);
+  writeReg(FXOS8700CQ_M_VECM_CFG, 0x70); //do not update internal reference values enable magnitude func, interrupt, and put interrupt on INT1
 
+
+  //set initial values for interrupt on magnitude
+  writeReg(FXOS8700CQ_M_VECM_INITX_MSB, calData.avgX >> 8);
+  writeReg(FXOS8700CQ_M_VECM_INITX_LSB, calData.avgX & 0xFF);
+  writeReg(FXOS8700CQ_M_VECM_INITY_MSB, calData.avgY >> 8);
+  writeReg(FXOS8700CQ_M_VECM_INITY_LSB, calData.avgY & 0xFF);
+  writeReg(FXOS8700CQ_M_VECM_INITZ_MSB, calData.avgZ >> 8);
+  writeReg(FXOS8700CQ_M_VECM_INITZ_LSB, calData.avgZ & 0xFF);
+
+////  delay(200);
+//  if (readReg(FXOS8700CQ_M_VECM_INITX_MSB) != 0xFF & (calData.avgX >> 8) ||
+//        readReg(FXOS8700CQ_M_VECM_INITX_LSB) != calData.avgX & 0xFF ||
+//        readReg(FXOS8700CQ_M_VECM_INITY_MSB) != 0xFF & (calData.avgY >> 8) ||
+//        readReg(FXOS8700CQ_M_VECM_INITY_LSB) != calData.avgY & 0xFF ||
+//        readReg(FXOS8700CQ_M_VECM_INITZ_MSB) != 0xFF & (calData.avgZ >> 8) ||
+//        readReg(FXOS8700CQ_M_VECM_INITZ_LSB) != calData.avgZ & 0xFF) {
+//        SerialUSB.println("Error on setting initial!!");
+//        SerialUSB.print(readReg(FXOS8700CQ_M_VECM_INITX_MSB), HEX); SerialUSB.println(0xFF & (calData.avgX >> 8), HEX);
+//        SerialUSB.print(readReg(FXOS8700CQ_M_VECM_INITX_LSB), HEX); SerialUSB.println(calData.avgX & 0xFF, HEX);
+//        SerialUSB.print(readReg(FXOS8700CQ_M_VECM_INITY_MSB), HEX); SerialUSB.println(0xFF & (calData.avgY >> 8), HEX);
+//        SerialUSB.print(readReg(FXOS8700CQ_M_VECM_INITY_LSB), HEX); SerialUSB.println(calData.avgY & 0xFF, HEX);
+//        SerialUSB.print(readReg(FXOS8700CQ_M_VECM_INITZ_MSB), HEX); SerialUSB.println(0xFF & (calData.avgZ >> 8), HEX);
+//        SerialUSB.print(readReg(FXOS8700CQ_M_VECM_INITZ_LSB), HEX); SerialUSB.println(calData.avgZ & 0xFF, HEX);
+//        
+////        while(1); 
+//        }
+//        //ERROR HERE for last 3 statements..?
+//
+//  else {
+//  SerialUSB.println("Initial Values set for VECM");
+//  while(1);
+//  }
+
+  SerialUSB.println("Set interrupt bits and thresholds");
   //use magnitude for interrupts
-  writeReg(FXOS8700CQ_M_VECM_CFG, 0x1B); //do not update internal reference values enable magnitude func, interrupt, and put interrupt on INT1
-  writeReg(FXOS8700CQ_M_THS_MSB, THRESHOLDS.threshMagnitudeUpper);
-  writeReg(FXOS8700CQ_M_THS_LSB, THRESHOLDS.threshMagnitudeLower);
-  writeReg(FXOS8700CQ_M_CNT, DEBOUNCE_COUNT);
+  writeReg(FXOS8700CQ_M_VECM_CFG, 0x7F); //do not update internal reference values enable magnitude func, interrupt, and put interrupt on INT1
+  writeReg(FXOS8700CQ_M_VECM_THS_MSB, thresholds.threshMagnitudeUpper);
+  writeReg(FXOS8700CQ_M_VECM_THS_LSB, thresholds.threshMagnitudeLower);
+  writeReg(FXOS8700CQ_M_VECM_CNT, DEBOUNCE_COUNT);
 
-  //set internal reference values for X, Y, Z as average values from calibration
-  //**TODO**//
+
   
   active();
 }
   
-void disableMagInterrupt(void) {
+void FXOS8700CQ::disableMagInterrupt(void) {
 
+  standby();
+
+  int8_t config = readReg(FXOS8700CQ_M_VECM_CFG);
+  writeReg(FXOS8700CQ_M_VECM_CFG, config & ~0x02);
+
+  active();
   
 }
 
 
-void calculateISRThreshold(void) {
+void FXOS8700CQ::calculateISRThreshold(void) {
 //  int16_t xThresh, yThresh, zThresh;
 
   //calculate threshold for interrupt
@@ -150,8 +188,8 @@ void calculateISRThreshold(void) {
 //  int16_t threshold = (int16_t) avgMagnitude + 2*avgSTD; //function actually accounts for avg magntude on its own; can reset this value
   int16_t threshold = (int16_t) 2*avgSTD;
 
-  THRESHOLDS.threshMagnitudeLower = threshold & 0xFF;
-  THRESHOLDS.threshMagnitudeUpper = threshold >> 8;
+  thresholds.threshMagnitudeLower = threshold & 0xFF;
+  thresholds.threshMagnitudeUpper = threshold >> 8;
   
 }
 
@@ -192,19 +230,18 @@ void FXOS8700CQ::calibrateMag(void) {
   //write calibration data to registers
   standby();
   //allow offset registers to be used
-  writeReg(FXOS8700CQ_M_CTRL_REG3, readReg(FXOS8700CQ_M_CTRL_REG3) & ~0x80);
+//  writeReg(FXOS8700CQ_M_CTRL_REG3, readReg(FXOS8700CQ_M_CTRL_REG3) & ~0x80);
 
   //write average values to offset registers
-  writeReg(FXOS8700CQ_M_OFF_X_MSB & (calData.avgX >> 8));
-  writeReg(FXOS8700CQ_M_OFF_X_LSB & (calData.avgX & 0xFF));
-  writeReg(FXOS8700CQ_M_OFF_Y_MSB & (calData.avgY >> 8));
-  writeReg(FXOS8700CQ_M_OFF_Y_LSB & (calData.avgY & 0xFF));
-  writeReg(FXOS8700CQ_M_OFF_Z_MSB & (calData.avgZ >> 8));
-  writeReg(FXOS8700CQ_M_OFF_Z_LSB & (calData.avgZ & 0xFF));
-
+//  writeReg(FXOS8700CQ_M_OFF_X_MSB, (calData.avgX >> 8));
+//  writeReg(FXOS8700CQ_M_OFF_X_LSB, (calData.avgX & 0xFF));
+//  writeReg(FXOS8700CQ_M_OFF_Y_MSB, (calData.avgY >> 8));
+//  writeReg(FXOS8700CQ_M_OFF_Y_LSB, (calData.avgY & 0xFF));
+//  writeReg(FXOS8700CQ_M_OFF_Z_MSB, (calData.avgZ >> 8));
+//  writeReg(FXOS8700CQ_M_OFF_Z_LSB, (calData.avgZ & 0xFF));
+  calculateISRThreshold();
 
   active();
-
-  SerialUBS.println("Finished calibration");
+  SerialUSB.println("Finished calibration");
 }
 //*****************************************************************************
