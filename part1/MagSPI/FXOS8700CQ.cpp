@@ -110,7 +110,7 @@ void FXOS8700CQ::checkWhoAmI(void) {
 void FXOS8700CQ::enableMagInterrupt(void) {
 
   standby();
-
+  resetInterrupt();
 //  uint8_t config;
 //  config = readReg(FXOS8700CQ_M_THS_CFG);
   //enable interrupts: latch output, OR of enabled axes, enable all axes, enable interrupt and use INT1 pin
@@ -171,6 +171,7 @@ void FXOS8700CQ::disableMagInterrupt(void) {
 
   int8_t config = readReg(FXOS8700CQ_M_VECM_CFG);
   writeReg(FXOS8700CQ_M_VECM_CFG, config & ~0x02);
+  resetInterrupt();
 
   active();
   
@@ -183,10 +184,12 @@ void FXOS8700CQ::calculateISRThreshold(void) {
   //calculate threshold for interrupt
   int32_t avgMagnitude = sqrt(calData.avgX*calData.avgX + calData.avgY*calData.avgY + calData.avgZ*calData.avgZ); 
   int32_t avgSTD = sqrt(calData.stdX*calData.stdX + calData.stdY*calData.stdY + calData.stdZ*calData.stdZ);
+//  SerialUSB.println(avgMagnitude);
+//  SerialUSB.println(avgSTD);
 
   //interrupt if magnitude exceeds average values and 2 of it's standard deviations. Other option would be to subtract avg std
 //  int16_t threshold = (int16_t) avgMagnitude + 2*avgSTD; //function actually accounts for avg magntude on its own; can reset this value
-  int16_t threshold = (int16_t) 2*avgSTD;
+  int16_t threshold = (int16_t) 4*avgSTD;
 
   thresholds.threshMagnitudeLower = threshold & 0xFF;
   thresholds.threshMagnitudeUpper = threshold >> 8;
@@ -196,8 +199,8 @@ void FXOS8700CQ::calculateISRThreshold(void) {
 void FXOS8700CQ::calibrateMag(void) {
   //use these to calculate moving average
   SerialUSB.println("Calibrating magnetometer...");
-  int32_t avgX, avgY, avgZ; //moving summation, then normalize
-  int32_t secMomentX, secMomentY, secMomentZ; //moving summation of squares i.e. second moment; use to calculate variance
+  int32_t avgX=0, avgY=0, avgZ=0; //moving summation, normalize after
+  int32_t secMomentX=0, secMomentY=0, secMomentZ=0; //moving summation of squares i.e. second moment; use to calculate variance
 //  countX, countY, countZ;
 
   
@@ -206,11 +209,17 @@ void FXOS8700CQ::calibrateMag(void) {
   //collect data for some time, calculate the average
   while(i++ < calNum) {
     readMagData();
-    avgX += (int32_t) magData.x; secMomentX += magData.x * magData.x;
-    avgZ += (int32_t) magData.y; secMomentY += magData.y * magData.y;
-    avgY += (int32_t) magData.z; secMomentZ += magData.z * magData.z;
-    delay(10); //based on sample rate; in real driver, this should use a LUT for the delay period based on sample rate config (not 1:1, need look-up)
+    avgX += (int32_t) magData.x; 
+    secMomentX += magData.x * magData.x;
     
+    avgY += (int32_t) magData.y; 
+    secMomentY += magData.y * magData.y;
+    
+    avgZ += (int32_t) magData.z; 
+    secMomentZ += magData.z * magData.z;
+    
+    delay(10); //based on sample rate; in real driver, this should use a LUT for the delay period based on sample rate config (not 1:1, need look-up)
+//    printMagData();
   }
 
   //finish calculation and put in registers
@@ -224,11 +233,17 @@ void FXOS8700CQ::calibrateMag(void) {
   calData.avgZ = (int16_t) avgZ;
   calData.stdZ = (int16_t) sqrt(secMomentZ/i - avgZ*avgZ);
 
-  SerialUSB.println("Calibration values calculated... writing to device");
+  #if 0
+  SerialUSB.println(calData.avgX);
+  SerialUSB.println(calData.stdX);
+  SerialUSB.println(calData.avgY);
+  SerialUSB.println(calData.stdY);
+  SerialUSB.println(calData.avgZ);
+  SerialUSB.println(calData.stdZ);
+  #endif
 
+  SerialUSB.println("Calibration values calculated.");
 
-  //write calibration data to registers
-  standby();
   //allow offset registers to be used
 //  writeReg(FXOS8700CQ_M_CTRL_REG3, readReg(FXOS8700CQ_M_CTRL_REG3) & ~0x80);
 
@@ -241,7 +256,23 @@ void FXOS8700CQ::calibrateMag(void) {
 //  writeReg(FXOS8700CQ_M_OFF_Z_LSB, (calData.avgZ & 0xFF));
   calculateISRThreshold();
 
-  active();
   SerialUSB.println("Finished calibration");
+}
+
+void FXOS8700CQ::printMagData(void) {
+  SerialUSB.print("X value = ");
+  SerialUSB.println(magData.x);
+
+  SerialUSB.print("Y value = ");
+  SerialUSB.println(magData.y);
+
+  SerialUSB.print("Z value = ");
+  SerialUSB.println(magData.z);
+
+  SerialUSB.println("");
+}
+
+void FXOS8700CQ::resetInterrupt(void) {
+  readReg(FXOS8700CQ_M_INT_SRC);
 }
 //*****************************************************************************

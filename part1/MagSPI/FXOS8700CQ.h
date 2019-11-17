@@ -231,9 +231,13 @@ class FXOS8700CQ {
         void enableMagInterrupt(void);
         void disableMagInterrupt(void);
         void calculateISRThreshold(void);
+        void resetInterrupt(void); //must read from a register to reset latched interrupt flag
 
         // Calibration Function
         void calibrateMag(void);
+
+        void printMagData(void);
+        
 
         
 };
