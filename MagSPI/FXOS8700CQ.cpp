@@ -111,14 +111,8 @@ void FXOS8700CQ::enableMagInterrupt(void) {
 
   standby();
   resetInterrupt();
-//  uint8_t config;
-//  config = readReg(FXOS8700CQ_M_THS_CFG);
-  //enable interrupts: latch output, OR of enabled axes, enable all axes, enable interrupt and use INT1 pin
-//  writeReg(FXOS8700CQ_M_THS_CFG, 0xFB);
-//  writeReg(FXOS8700CQ_M_THS_X_MSB, readReg(FXOS8700CQ_M_THS_X_MSB) | 0x80); //set bit that resets debounce counter
-//
-//  writeReg(FXOS8700CQ_M_THS_COUNT, DEBOUNCE_COUNT);
-  writeReg(FXOS8700CQ_M_VECM_CFG, 0x70); //do not update internal reference values enable magnitude func, interrupt, and put interrupt on INT1
+
+  writeReg(FXOS8700CQ_M_VECM_CFG, 0x70); //config: do not update internal reference values enable magnitude func, interrupt, and put interrupt on INT1
 
 
   //set initial values for interrupt on magnitude
@@ -129,29 +123,6 @@ void FXOS8700CQ::enableMagInterrupt(void) {
   writeReg(FXOS8700CQ_M_VECM_INITZ_MSB, calData.avgZ >> 8);
   writeReg(FXOS8700CQ_M_VECM_INITZ_LSB, calData.avgZ & 0xFF);
 
-////  delay(200);
-//  if (readReg(FXOS8700CQ_M_VECM_INITX_MSB) != 0xFF & (calData.avgX >> 8) ||
-//        readReg(FXOS8700CQ_M_VECM_INITX_LSB) != calData.avgX & 0xFF ||
-//        readReg(FXOS8700CQ_M_VECM_INITY_MSB) != 0xFF & (calData.avgY >> 8) ||
-//        readReg(FXOS8700CQ_M_VECM_INITY_LSB) != calData.avgY & 0xFF ||
-//        readReg(FXOS8700CQ_M_VECM_INITZ_MSB) != 0xFF & (calData.avgZ >> 8) ||
-//        readReg(FXOS8700CQ_M_VECM_INITZ_LSB) != calData.avgZ & 0xFF) {
-//        SerialUSB.println("Error on setting initial!!");
-//        SerialUSB.print(readReg(FXOS8700CQ_M_VECM_INITX_MSB), HEX); SerialUSB.println(0xFF & (calData.avgX >> 8), HEX);
-//        SerialUSB.print(readReg(FXOS8700CQ_M_VECM_INITX_LSB), HEX); SerialUSB.println(calData.avgX & 0xFF, HEX);
-//        SerialUSB.print(readReg(FXOS8700CQ_M_VECM_INITY_MSB), HEX); SerialUSB.println(0xFF & (calData.avgY >> 8), HEX);
-//        SerialUSB.print(readReg(FXOS8700CQ_M_VECM_INITY_LSB), HEX); SerialUSB.println(calData.avgY & 0xFF, HEX);
-//        SerialUSB.print(readReg(FXOS8700CQ_M_VECM_INITZ_MSB), HEX); SerialUSB.println(0xFF & (calData.avgZ >> 8), HEX);
-//        SerialUSB.print(readReg(FXOS8700CQ_M_VECM_INITZ_LSB), HEX); SerialUSB.println(calData.avgZ & 0xFF, HEX);
-//        
-////        while(1); 
-//        }
-//        //ERROR HERE for last 3 statements..?
-//
-//  else {
-//  SerialUSB.println("Initial Values set for VECM");
-//  while(1);
-//  }
 
   SerialUSB.println("Set interrupt bits and thresholds");
   //use magnitude for interrupts
